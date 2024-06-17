@@ -1,0 +1,103 @@
+require 'nokogiri'
+require 'open-uri'
+require 'sqlite3'
+
+ 
+site = 'https://www.fontanka.ru/24hours.html'
+
+
+#Подключаем базу данных SQLite3
+def get_db
+	db = SQLite3::Database.new 'articles.db'
+	db.results_as_hash = true
+	return db
+end
+
+
+#Бесконечный цикл
+while 0 < 1 do
+
+doc = Nokogiri::HTML5(URI.open("#{site}"))
+   
+nodeset = doc.xpath('//a')   
+
+i = 0
+
+#Ишем на странице все атрибуты href содержащие адрес новости
+node_length = nodeset.map {|element| element["href"] }.length
+puts node_length
+
+while i < node_length do
+
+path = ''
+addr  = ''
+addr  = nodeset.map {|element| element["href"] }[i]
+
+#адрес страницы
+begin 
+path = addr[0,5]
+rescue 
+end 	
+	
+#нужны все страницы начинающиеся на /2024
+if (path == '/2024' && !addr.include?("all.comments.html"))
+url = "https://www.fontanka.ru#{addr}"  
+
+puts url
+
+count_url = 0
+
+db = get_db
+#Проверяем в БД наличие новости
+count_url = db.execute  'select count(*) as count from main where url = ?' , [url]
+count_url = count_url[0][0]
+puts "#{i} #{url} #{count_url}"
+
+		#Загружаем новости в БД 
+		if count_url == 0
+
+		article_title   = ''
+		article_date    = ''
+		article_body    = ''
+		article_author  = ''
+		article_views = '' 
+
+		article = Nokogiri::HTML5(URI.open(url))
+		article_title   = article.xpath('//h1').text
+		article_date    = article.xpath('//h1/following-sibling::div/child::span').text
+		article_author  = article.xpath('//p[@itemprop="name"]').text 
+		article_views   = article.xpath('//span[contains(@class, "primaryOverlineMobile")]').text
+ 
+	
+		#Собираем новость из параграфов
+		j = 0
+		while j  <= article.xpath('//p').length - 25 do
+		article_body   = article_body + article.xpath('//p')[j + 10]
+		j += 1
+		end
+
+		puts article_title
+		puts article_date
+		puts article_body
+		puts article_author
+		puts article_views
+		puts ''
+
+		#Запись в БД
+		db.execute 'insert into main(title, date_in,author,	body, inserted, views, url) values ( ?, ?, ?, ?, ?, ?, ?)', [ article_title.downcase, article_date, article_author , article_body.downcase, DateTime.now.strftime("%d/%m/%Y %H:%M") , article_views, url ]
+ 
+		end
+		
+		
+end if  
+
+ 
+
+  
+i += 1
+end
+
+puts 'sleeping 30 seconds'
+sleep(30)
+
+end
